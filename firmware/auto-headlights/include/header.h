@@ -43,6 +43,7 @@ uint8_t state_bits = 0b00000000;
 
 #define LIGHT_PORT		    PORTB
 #define LIGHT_MASK          0b00000111
+#define APARK_MASK          0b00000001
 
 // Inputs, pin definitions
 #define IGNITION			PIND5			// PCINT21
@@ -60,3 +61,6 @@ uint8_t state_bits = 0b00000000;
 uint8_t adcIndex = 0;
 const uint8_t adcSize = 20;
 uint16_t adcArray[adcSize] = {0};
+
+// Software counter for time tracking
+uint8_t sw_timer = 0;

@@ -11,7 +11,7 @@
 #include "header.h"
 
 uint8_t getLights(uint8_t light_bits)  {
-  uint8_t aux = light_bits & 0b00000001;
+  uint8_t aux = light_bits & APARK_MASK;
   light_bits = light_bits >> 1;
 
   ADCSRA |= (1 << ADSC);
@@ -67,29 +67,21 @@ uint8_t getLights(uint8_t light_bits)  {
   return light_bits;
 }
 
-SIGNAL (PCINT2_vect)  {
-  // Ignition and parking switch signals
-  // Consider debounce
-
-  // Disable inturrupts
-  cli();
-  uint8_t prevParkSW = state_bits & PARKSW_MASK;
-
-  state_bits = (state_bits & !INPUT_MASK) | (PIND & INPUT_MASK);
-  if (prevParkSW != (state_bits & PARKSW_MASK))  {
-    // Code needs to go here
-  }
-
-  // Enable interrupts
-	sei();
-}
-
 SIGNAL (TIMER1_COMPA_vect)  {
   // 100ms state updates
+  uint8_t prevParkSW = state_bits & PARKSW_MASK;
+
   state_bits = (state_bits & !INPUT_MASK) | (PIND & INPUT_MASK);
   state_bits = (state_bits & !LIGHT_MASK) | getLights(state_bits & LIGHT_MASK);
 
   // Turn off light home feature after 1 minute
+
+  // Control function of parking switch and aux output
+  if ((state_bits & PARKSW_MASK) > 0)  {
+    state_bits |= APARK_MASK;                 // Turn on parking lights with aux output if parking switch is on
+  } else if (prevParkSW > 0)  {
+    state_bits &= APARK_MASK;                 // Turn off aux output if parking switch changes to off
+  } 
 
   // Set output pins for headlights
   LIGHT_PORT = (LIGHT_PORT & !LIGHT_MASK) | (state_bits & LIGHT_MASK);
@@ -115,8 +107,8 @@ int main(void)  {
 	EIMSK |= (1 << INT1) | (1 << INT0);
 
 	// Set pin change interrupt for ignition
-	PCICR |= (1 << PCIE2);
-	PCMSK2 |= (1 << PCINT20) | (1 << PCINT21);
+	// PCICR |= (1 << PCIE2);
+	// PCMSK2 |= (1 << PCINT20) | (1 << PCINT21);
 
   // Set up timers for state and light home feature
 	OCR1A  = 3125;						// 100ms equivalent
