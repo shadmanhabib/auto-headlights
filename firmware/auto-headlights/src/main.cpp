@@ -76,24 +76,7 @@ SIGNAL (INT0_vect)  {
       state_bits |= LOCK_MASK;
     } else  {
       state_bits &= !APARK_MASK;
-    }
-
-    // Set output pins for headlights
-    LIGHT_PORT = (LIGHT_PORT & !LIGHT_MASK) | (state_bits & APARK_MASK);
-  }
-
-  sei();
-}
-
-SIGNAL (INT1_vect)  {
-  // Inturrupt from unlock signal
-  cli();
-
-  if ((state_bits & IGNITION_MASK) == 0)  {
-    state_bits &= !LOCK_MASK;
-
-    if ((state_bits & LIGHT_MASK) > 0)  {
-      state_bits |= APARK_MASK;
+      state_bits &= !LIGHTHOME_MASK;
     }
 
     // Set output pins for headlights
@@ -113,11 +96,35 @@ SIGNAL (TIMER1_COMPA_vect)  {
   uint8_t changed_states = state_bits ^ prevState_bits;
 
   // Turn off light home feature after 1 minute
+  if ((state_bits & LIGHTHOME_MASK) > 0)  {
+    sw_timer++;
+
+    if (sw_timer >= 250)  {
+      state_bits &= !APARK_MASK;
+      state_bits &= !LIGHTHOME_MASK;
+      sw_timer = 0;
+    }
+  }
+
+  // Control functions on ignition change
   if ((changed_states & IGNITION_MASK) > 0)  {
     if ((state_bits & IGNITION_MASK) > 0)  {
       state_bits &= !APARK_MASK;                    // Turn off aux output if ignition turned on
+      state_bits &= !ENABLE_MASK;
+      sw_timer = 0;
     } else if ((state_bits & LIGHT_MASK) > 0)  {
       state_bits |= APARK_MASK;                     // Turn on aux output if ignition turned off and it's dark
+      state_bits |= LIGHTHOME_MASK;
+    }
+  }
+
+  // Re-enable auto headlights ater ignition
+  if ((state_bits & ENABLE_MASK) == 0)  {
+    sw_timer++;
+
+    if (sw_timer >= 50)  {
+      state_bits |= ENABLE_MASK;
+      sw_timer = 0;
     }
   }
 
@@ -129,7 +136,7 @@ SIGNAL (TIMER1_COMPA_vect)  {
   }
 
   // Set output pins for headlights
-  if ((state_bits & IGNITION_MASK) == 0)  {
+  if ((state_bits & ENABLE_MASK) == 0 || (state_bits & IGNITION_MASK) == 0)  {
     LIGHT_PORT = (LIGHT_PORT & !LIGHT_MASK) | (state_bits & APARK_MASK);
   } else  {
     LIGHT_PORT = (LIGHT_PORT & !LIGHT_MASK) | (state_bits & LIGHT_MASK);
@@ -153,11 +160,7 @@ int main(void)  {
 
 	// Set lock and unlock interrupts
 	EICRA |= (1 << ISC11) | (1 << ISC10);
-	EIMSK |= (1 << INT1) | (1 << INT0);
-
-	// Set pin change interrupt for ignition
-	// PCICR |= (1 << PCIE2);
-	// PCMSK2 |= (1 << PCINT20) | (1 << PCINT21);
+	EIMSK |= (1 << INT0);
 
   // Set up timers for state and light home feature
 	OCR1A  = 3125;						// 100ms equivalent
@@ -170,8 +173,10 @@ int main(void)  {
   // Enable inturrupts
   sei();
 
+  state_bits |= ENABLE_MASK;
+
   while (1)  {
-    // do some stuff
+    // Controller to run indefinitely
   }
 
 }
