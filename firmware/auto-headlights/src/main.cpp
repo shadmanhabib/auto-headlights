@@ -67,24 +67,73 @@ uint8_t getLights(uint8_t light_bits)  {
   return light_bits;
 }
 
+SIGNAL (INT0_vect)  {
+  // Inturrupt from lock signal
+  cli();
+
+  if ((state_bits & IGNITION_MASK) == 0)  {
+    if ((state_bits & LOCK_MASK) == 0)  {
+      state_bits |= LOCK_MASK;
+    } else  {
+      state_bits &= !APARK_MASK;
+    }
+
+    // Set output pins for headlights
+    LIGHT_PORT = (LIGHT_PORT & !LIGHT_MASK) | (state_bits & APARK_MASK);
+  }
+
+  sei();
+}
+
+SIGNAL (INT1_vect)  {
+  // Inturrupt from unlock signal
+  cli();
+
+  if ((state_bits & IGNITION_MASK) == 0)  {
+    state_bits &= !LOCK_MASK;
+
+    if ((state_bits & LIGHT_MASK) > 0)  {
+      state_bits |= APARK_MASK;
+    }
+
+    // Set output pins for headlights
+    LIGHT_PORT = (LIGHT_PORT & !LIGHT_MASK) | (state_bits & APARK_MASK);
+  }
+
+  sei();
+}
+
 SIGNAL (TIMER1_COMPA_vect)  {
   // 100ms state updates
-  uint8_t prevParkSW = state_bits & PARKSW_MASK;
+  uint8_t prevState_bits = state_bits;
 
   state_bits = (state_bits & !INPUT_MASK) | (PIND & INPUT_MASK);
   state_bits = (state_bits & !LIGHT_MASK) | getLights(state_bits & LIGHT_MASK);
 
+  uint8_t changed_states = state_bits ^ prevState_bits;
+
   // Turn off light home feature after 1 minute
+  if ((changed_states & IGNITION_MASK) > 0)  {
+    if ((state_bits & IGNITION_MASK) > 0)  {
+      state_bits &= !APARK_MASK;                    // Turn off aux output if ignition turned on
+    } else if ((state_bits & LIGHT_MASK) > 0)  {
+      state_bits |= APARK_MASK;                     // Turn on aux output if ignition turned off and it's dark
+    }
+  }
 
   // Control function of parking switch and aux output
   if ((state_bits & PARKSW_MASK) > 0)  {
-    state_bits |= APARK_MASK;                 // Turn on parking lights with aux output if parking switch is on
-  } else if (prevParkSW > 0)  {
-    state_bits &= APARK_MASK;                 // Turn off aux output if parking switch changes to off
-  } 
+    state_bits |= APARK_MASK;                       // Turn on parking lights with aux output if parking switch is on
+  } else if ((prevState_bits & PARKSW_MASK) > 0)  {
+    state_bits &= !APARK_MASK;                      // Turn off aux output if parking switch changes to off
+  }
 
   // Set output pins for headlights
-  LIGHT_PORT = (LIGHT_PORT & !LIGHT_MASK) | (state_bits & LIGHT_MASK);
+  if ((state_bits & IGNITION_MASK) == 0)  {
+    LIGHT_PORT = (LIGHT_PORT & !LIGHT_MASK) | (state_bits & APARK_MASK);
+  } else  {
+    LIGHT_PORT = (LIGHT_PORT & !LIGHT_MASK) | (state_bits & LIGHT_MASK);
+  }
 }
 
 int main(void)  {

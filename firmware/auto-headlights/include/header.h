@@ -14,7 +14,7 @@
 #include <util/delay.h>
 
 // 8 MHz clock
-#define F_CPU				8000000
+// #define F_CPU				8000000
 
 /*
  * uint8_t state_bits: store vehicle defined states
@@ -22,7 +22,7 @@
  *         6: lock/unlock
  *         5: ignition
  *         4: park switch
- *         3: 
+ *         3: light home mode on
  *         2: lowbeam on
  *         1: parking on
  * LSB bit 0: aux parking on
@@ -32,9 +32,10 @@ uint8_t state_bits = 0b00000000;
 
 // State masks as defined above
 #define ENABLE_MASK         0b10000000
-#define PLOCK_MASK          0b01000000
+#define LOCK_MASK           0b01000000
 #define IGNITION_MASK       0b00100000
 #define PARKSW_MASK         0b00010000
+#define LIGHTHOME_MASK      0b00001000
 
 // Outputs, pin definitions
 #define HEADLIGHT_RELAY		PORTB2
