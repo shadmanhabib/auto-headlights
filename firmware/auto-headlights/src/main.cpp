@@ -177,6 +177,8 @@ int main(void)  {
 
   while (1)  {
     // Controller to run indefinitely
+    // Sleep when not working
+    SMCR |= (1 << SE);
   }
 
 }
