@@ -31,25 +31,25 @@ uint8_t getLights(uint8_t light_bits)  {
 
   switch (light_bits)  {
   case 0b00:
-    if (adcVal > 650)  {
+    if (adcVal > 600)  {
 			light_bits = 0b00;
-		} else if (adcVal > 350)  {
+		} else if (adcVal > 250)  {
 			light_bits = 0b01;
 		} else  {
 			light_bits = 0b11;
 		}
     break;
   case 0b01:
-    if (adcVal > 850)  {
+    if (adcVal > 800)  {
 			light_bits = 0b00;
-		} else if (adcVal > 350)  {
+		} else if (adcVal > 250)  {
 			light_bits = 0b01;
 		} else  {
 			light_bits = 0b11;
 		}
     break;
   case 0b11:
-    if (adcVal > 850)  {
+    if (adcVal > 800)  {
 			light_bits = 0b00;
 		} else if (adcVal > 500)  {
 			light_bits = 0b01;
@@ -69,62 +69,84 @@ uint8_t getLights(uint8_t light_bits)  {
 
 SIGNAL (INT0_vect)  {
   // Inturrupt from lock signal
-  cli();
+  if (int_timer == 0)  {
+    int_timer++;
 
-  if ((state_bits & IGNITION_MASK) == 0)  {
-    if ((state_bits & LOCK_MASK) == 0)  {
+    if ((state_bits & IGNITION_MASK) == 0)  {
       state_bits |= LOCK_MASK;
-    } else  {
-      state_bits &= !APARK_MASK;
-      state_bits &= !LIGHTHOME_MASK;
+      state_bits &= ~APARK_MASK;
+      state_bits &= ~LIGHTHOME_MASK;
+
+      // Set output pins for headlights
+      LIGHT_PORT = (LIGHT_PORT & ~LIGHT_MASK) | (state_bits & APARK_MASK);
     }
-
-    // Set output pins for headlights
-    LIGHT_PORT = (LIGHT_PORT & !LIGHT_MASK) | (state_bits & APARK_MASK);
   }
+}
 
-  sei();
+SIGNAL (INT1_vect)  {
+  // Interrupt from unlock signal
+  if (int_timer == 0)  {
+    int_timer++;
+
+    if ((state_bits & IGNITION_MASK) == 0)  {
+      state_bits &= ~LOCK_MASK;
+      _delay_ms(1500);
+
+      if ((state_bits & LIGHT_MASK) > 0)  {
+        state_bits |= APARK_MASK;
+        state_bits |= LIGHTHOME_MASK;
+      }
+
+      // Set output pins for headlights
+      LIGHT_PORT = (LIGHT_PORT & ~LIGHT_MASK) | (state_bits & APARK_MASK);
+    }
+  }
 }
 
 SIGNAL (TIMER1_COMPA_vect)  {
   // 100ms state updates
   uint8_t prevState_bits = state_bits;
 
-  state_bits = (state_bits & !INPUT_MASK) | (PIND & INPUT_MASK);
-  state_bits = (state_bits & !LIGHT_MASK) | getLights(state_bits & LIGHT_MASK);
+  state_bits = (state_bits & ~INPUT_MASK) | (~PIND & INPUT_MASK);
+  state_bits = (state_bits & ~LIGHT_MASK) | getLights(state_bits & LIGHT_MASK);
 
   uint8_t changed_states = state_bits ^ prevState_bits;
 
+  // Count for interrupt timer
+  if (int_timer != 0)  {
+    int_timer = (int_timer + 1) % 20;
+  }
+
   // Turn off light home feature after 1 minute
+  // Re-enable auto headlights ater ignition
   if ((state_bits & LIGHTHOME_MASK) > 0)  {
     sw_timer++;
 
     if (sw_timer >= 250)  {
-      state_bits &= !APARK_MASK;
-      state_bits &= !LIGHTHOME_MASK;
+      state_bits &= ~APARK_MASK;
+      state_bits &= ~LIGHTHOME_MASK;
       sw_timer = 0;
     }
+  } else if ((state_bits & ENABLE_MASK) == 0)  {
+    sw_timer++;
+
+    if (sw_timer >= 25)  {
+      state_bits |= ENABLE_MASK;
+      sw_timer = 0;
+    }
+  } else  {
+    sw_timer = 0;
   }
 
   // Control functions on ignition change
   if ((changed_states & IGNITION_MASK) > 0)  {
     if ((state_bits & IGNITION_MASK) > 0)  {
-      state_bits &= !APARK_MASK;                    // Turn off aux output if ignition turned on
-      state_bits &= !ENABLE_MASK;
-      sw_timer = 0;
+      state_bits &= ~APARK_MASK;                    // Turn off aux output if ignition turned on
+      state_bits &= ~LOCK_MASK;
+      state_bits &= ~ENABLE_MASK;
     } else if ((state_bits & LIGHT_MASK) > 0)  {
       state_bits |= APARK_MASK;                     // Turn on aux output if ignition turned off and it's dark
       state_bits |= LIGHTHOME_MASK;
-    }
-  }
-
-  // Re-enable auto headlights ater ignition
-  if ((state_bits & ENABLE_MASK) == 0)  {
-    sw_timer++;
-
-    if (sw_timer >= 50)  {
-      state_bits |= ENABLE_MASK;
-      sw_timer = 0;
     }
   }
 
@@ -132,14 +154,14 @@ SIGNAL (TIMER1_COMPA_vect)  {
   if ((state_bits & PARKSW_MASK) > 0)  {
     state_bits |= APARK_MASK;                       // Turn on parking lights with aux output if parking switch is on
   } else if ((prevState_bits & PARKSW_MASK) > 0)  {
-    state_bits &= !APARK_MASK;                      // Turn off aux output if parking switch changes to off
+    state_bits &= ~APARK_MASK;                      // Turn off aux output if parking switch changes to off
   }
 
   // Set output pins for headlights
   if ((state_bits & ENABLE_MASK) == 0 || (state_bits & IGNITION_MASK) == 0)  {
-    LIGHT_PORT = (LIGHT_PORT & !LIGHT_MASK) | (state_bits & APARK_MASK);
+    LIGHT_PORT = (LIGHT_PORT & ~LIGHT_MASK) | (state_bits & APARK_MASK);
   } else  {
-    LIGHT_PORT = (LIGHT_PORT & !LIGHT_MASK) | (state_bits & LIGHT_MASK);
+    LIGHT_PORT = (LIGHT_PORT & ~LIGHT_MASK) | (state_bits & LIGHT_MASK);
   }
 }
 
@@ -154,13 +176,13 @@ int main(void)  {
 	// Set ADC pin as input
 	DDRE &= ~(1 << LIGHT_SENSOR);
 
-  // Set up ADC for light sensor with interrupt
+  // Set up ADC for light sensor
 	ADMUX |= (1 << REFS0) | (1 << MUX2) | (1 << MUX1) | (1 << MUX0);
-	ADCSRA |= (1 << ADEN)  | (1 << ADIE) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);
+	ADCSRA |= (1 << ADEN)  | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);
 
 	// Set lock and unlock interrupts
-	EICRA |= (1 << ISC11) | (1 << ISC10);
-	EIMSK |= (1 << INT0);
+	EICRA |= (1 << ISC01) | (1 << ISC11);
+	EIMSK |= (1 << INT0) | (1 << INT1);
 
   // Set up timers for state and light home feature
 	OCR1A  = 3125;						// 100ms equivalent

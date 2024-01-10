@@ -60,8 +60,9 @@ uint8_t state_bits = 0b00000000;
 
 // ADC Variables
 uint8_t adcIndex = 0;
-const uint8_t adcSize = 20;
+const uint8_t adcSize = 10;
 uint16_t adcArray[adcSize] = {0};
 
 // Software counter for time tracking
 uint8_t sw_timer = 0;
+uint8_t int_timer = 0;
