@@ -144,6 +144,7 @@ SIGNAL (TIMER1_COMPA_vect)  {
       state_bits &= ~APARK_MASK;                    // Turn off aux output if ignition turned on
       state_bits &= ~LOCK_MASK;
       state_bits &= ~ENABLE_MASK;
+      state_bits &= ~LIGHTHOME_MASK;
     } else if ((state_bits & LIGHT_MASK) > 0)  {
       state_bits |= APARK_MASK;                     // Turn on aux output if ignition turned off and it's dark
       state_bits |= LIGHTHOME_MASK;
