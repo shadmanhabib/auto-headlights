@@ -134,8 +134,6 @@ SIGNAL (TIMER1_COMPA_vect)  {
       state_bits |= ENABLE_MASK;
       sw_timer = 0;
     }
-  } else  {
-    sw_timer = 0;
   }
 
   // Control functions on ignition change
@@ -149,6 +147,7 @@ SIGNAL (TIMER1_COMPA_vect)  {
       state_bits |= APARK_MASK;                     // Turn on aux output if ignition turned off and it's dark
       state_bits |= LIGHTHOME_MASK;
     }
+    sw_timer = 0;
   }
 
   // Control function of parking switch and aux output
